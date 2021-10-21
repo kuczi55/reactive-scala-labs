@@ -3,11 +3,12 @@ package EShop.lab2
 import akka.actor.Cancellable
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.{ActorRef, Behavior}
-import scala.language.postfixOps
 
+import scala.language.postfixOps
 import scala.concurrent.duration._
 
 object TypedCartActor {
+  def apply(): Behavior[Command] = new TypedCartActor().start
 
   sealed trait Command
   case class AddItem(item: Any)        extends Command
@@ -16,6 +17,8 @@ object TypedCartActor {
   case object StartCheckout            extends Command
   case object ConfirmCheckoutCancelled extends Command
   case object ConfirmCheckoutClosed    extends Command
+  case object ListCart                 extends Command
+  case object Stop                     extends Command
 
   sealed trait Event
   case class CheckoutStarted(checkoutRef: ActorRef[TypedCheckout.Command]) extends Event
@@ -25,16 +28,81 @@ class TypedCartActor {
 
   import TypedCartActor._
 
-  val cartTimerDuration: FiniteDuration = 5 seconds
+  val cartTimerDuration: FiniteDuration = 15 seconds
 
-  private def scheduleTimer(context: ActorContext[TypedCartActor.Command]): Cancellable = ???
+  private def scheduleTimer(context: ActorContext[TypedCartActor.Command]): Cancellable =
+    context.scheduleOnce(cartTimerDuration, context.self, ExpireCart)
 
-  def start: Behavior[TypedCartActor.Command] = ???
+  def start: Behavior[TypedCartActor.Command] = empty
 
-  def empty: Behavior[TypedCartActor.Command] = ???
+  def empty: Behavior[TypedCartActor.Command] = Behaviors.receive (
+    (context, msg) =>
+      msg match {
+        case AddItem(item) =>
+          nonEmpty(Cart.empty.addItem(item), scheduleTimer(context))
 
-  def nonEmpty(cart: Cart, timer: Cancellable): Behavior[TypedCartActor.Command] = ???
+        case ListCart =>
+          println("Cart is empty!")
+          Behaviors.same
 
-  def inCheckout(cart: Cart): Behavior[TypedCartActor.Command] = ???
+        case Stop =>
+          stop
+      }
+  )
+
+  def nonEmpty(cart: Cart, timer: Cancellable): Behavior[TypedCartActor.Command] = Behaviors.receive (
+    (context, msg) =>
+      msg match {
+        case AddItem(item) =>
+          timer.cancel()
+          nonEmpty(cart.addItem(item), scheduleTimer(context))
+
+        case RemoveItem(item) if cart.contains(item) && cart.size == 1 =>
+          timer.cancel()
+          empty
+
+        case RemoveItem(item) if cart.contains(item) =>
+          timer.cancel()
+          nonEmpty(cart.removeItem(item), scheduleTimer(context))
+
+        case ExpireCart =>
+          timer.cancel()
+          println("Cart expired")
+          empty
+
+        case StartCheckout =>
+          timer.cancel()
+          inCheckout(cart)
+
+        case ListCart =>
+          println("Items in cart: " + cart + "\n")
+          Behaviors.same
+
+        case Stop =>
+          stop
+      }
+  )
+
+  def inCheckout(cart: Cart): Behavior[TypedCartActor.Command] = Behaviors.receive(
+    (context, msg) =>
+      msg match {
+        case ConfirmCheckoutClosed =>
+          println("Checkout was closed")
+          empty
+
+        case ConfirmCheckoutCancelled =>
+          println("Checkout was cancelled")
+          nonEmpty(cart, scheduleTimer(context))
+
+        case ListCart =>
+          println("Items in cart: " + cart + "\n")
+          Behaviors.same
+
+        case Stop =>
+          stop
+      }
+  )
+
+  def stop: Behavior[TypedCartActor.Command] = Behaviors.stopped
 
 }
