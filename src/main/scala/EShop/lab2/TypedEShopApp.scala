@@ -58,7 +58,7 @@ object TypedEShopApp extends App {
       }
 
       else if(input.toLowerCase().equals("checkout")) {
-        mainActor ! TypedCartActor.StartCheckout
+        mainActor ! TypedCartActor.StartCheckout(null)
         val checkoutActor = ActorSystem(TypedCheckout(), "checkoutActor" + counter)
         counter += 1
         checkoutActor ! TypedCheckout.StartCheckout
@@ -131,7 +131,7 @@ object TypedEShopApp extends App {
             mainActor ! ConfirmCheckoutCancelled
           }
           else {
-            checkoutActor ! SelectPayment(paymentMethod)
+            checkoutActor ! SelectPayment(paymentMethod, null)
 
             breakable {
               while(true) {

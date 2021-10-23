@@ -19,8 +19,8 @@ object TypedCartActor {
   case object ConfirmCheckoutCancelled                                      extends Command
   case object ConfirmCheckoutClosed                                         extends Command
   case class GetItems(sender: ActorRef[Cart])                               extends Command // command made to make testing easier
-  case object ListCart                 extends Command
-  case object Stop                     extends Command
+  case object ListCart                                                      extends Command
+  case object Stop                                                          extends Command
 
   sealed trait Event
   case class CheckoutStarted(checkoutRef: ActorRef[TypedCheckout.Command]) extends Event
@@ -72,8 +72,11 @@ class TypedCartActor {
           println("Cart expired")
           empty
 
-        case StartCheckout =>
+        case StartCheckout(orderManagerRef) =>
           timer.cancel()
+          val checkout = context.spawn(new TypedCheckout(context.self).start, "Checkout")
+          checkout ! TypedCheckout.StartCheckout
+          orderManagerRef ! OrderManager.ConfirmCheckoutStarted(checkout)
           inCheckout(cart)
 
         case ListCart =>
