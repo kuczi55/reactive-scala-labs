@@ -47,6 +47,11 @@ class TypedCartActor {
           println("Cart is empty!")
           Behaviors.same
 
+        case GetItems(sender) => {
+          sender ! Cart.empty
+          Behaviors.same
+        }
+
         case Stop =>
           stop
       }
@@ -83,6 +88,10 @@ class TypedCartActor {
           println("Items in cart: " + cart + "\n")
           Behaviors.same
 
+        case GetItems(sender) =>
+          sender ! cart
+          Behaviors.same
+
         case Stop =>
           stop
       }
@@ -101,6 +110,10 @@ class TypedCartActor {
 
         case ListCart =>
           println("Items in cart: " + cart + "\n")
+          Behaviors.same
+
+        case GetItems(sender) =>
+          sender ! cart
           Behaviors.same
 
         case Stop =>

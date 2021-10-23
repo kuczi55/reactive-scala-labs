@@ -79,7 +79,6 @@ class TypedCheckout(
           println("Selected payment method: " + method)
           val payment = context.spawn(new Payment(method, orderManagerRef, context.self).start, "Payment")
           orderManagerRef ! OrderManager.ConfirmPaymentStarted(payment)
-          cartActor ! TypedCartActor.ConfirmCheckoutClosed
           processingPayment(schedulePaymentTimer(context))
 
         case ExpireCheckout =>
@@ -97,6 +96,7 @@ class TypedCheckout(
   def processingPayment(timer: Cancellable): Behavior[TypedCheckout.Command] = Behaviors.receiveMessage {
     case ConfirmPaymentReceived =>
       timer.cancel()
+      cartActor ! TypedCartActor.ConfirmCheckoutClosed
       closed
 
     case ExpirePayment =>
