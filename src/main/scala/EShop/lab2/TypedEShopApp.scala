@@ -131,7 +131,7 @@ object TypedEShopApp extends App {
             mainActor ! ConfirmCheckoutCancelled
           }
           else {
-            checkoutActor ! SelectPayment(paymentMethod, null)
+            checkoutActor ! SelectPayment(paymentMethod, null, null)
 
             breakable {
               while(true) {

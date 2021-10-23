@@ -21,13 +21,14 @@ object TypedCheckout {
   case class SelectDeliveryMethod(method: String)                                            extends Command
   case object CancelCheckout                                                                 extends Command
   case object ExpireCheckout                                                                 extends Command
-  case class SelectPayment(payment: String, orderManagerRef: ActorRef[OrderManager.Command]) extends Command
+  case class SelectPayment(payment: String, orderManagerRef: ActorRef[Event],
+                           orderManagerPaymentRef: ActorRef[Payment.Event])                  extends Command
   case object ExpirePayment                                                                  extends Command
   case object ConfirmPaymentReceived                                                         extends Command
 
   sealed trait Event
-  case object CheckOutClosed                           extends Event
-  case class PaymentStarted(paymentRef: ActorRef[Any]) extends Event
+  case object CheckOutClosed                                       extends Event
+  case class PaymentStarted(paymentRef: ActorRef[Payment.Command]) extends Event
 }
 
 class TypedCheckout(
@@ -74,11 +75,11 @@ class TypedCheckout(
   def selectingPaymentMethod(timer: Cancellable): Behavior[TypedCheckout.Command] = Behaviors.receive (
     (context, msg) =>
       msg match {
-        case SelectPayment(method, orderManagerRef) =>
+        case SelectPayment(method, orderManagerRef, orderManagerPaymentRef) =>
           timer.cancel()
           println("Selected payment method: " + method)
-          val payment = context.spawn(new Payment(method, orderManagerRef, context.self).start, "Payment")
-          orderManagerRef ! OrderManager.ConfirmPaymentStarted(payment)
+          val payment = context.spawn(new Payment(method, orderManagerPaymentRef, context.self).start, "Payment")
+          orderManagerRef ! PaymentStarted(payment)
           processingPayment(schedulePaymentTimer(context))
 
         case ExpireCheckout =>

@@ -24,7 +24,8 @@ class TypedCheckoutTest
 
   it should "Send close confirmation to cart" in {
     val cartActorProbe = testKit.createTestProbe[TypedCartActor.Command]
-    val orderManagerProbe = testKit.createTestProbe[OrderManager.Command]
+    val orderManagerProbe = testKit.createTestProbe[Event]
+    val orderManagerPaymentProbe = testKit.createTestProbe[Payment.Event]
     val probe = testKit.createTestProbe[String]()
 
     val checkoutActor = testKit.spawn(new TypedCheckout(cartActorProbe.ref) {
@@ -54,7 +55,7 @@ class TypedCheckoutTest
     checkoutActor ! StartCheckout
     checkoutActor ! SelectDeliveryMethod("inpost")
     probe.expectMessage("selectingDelivery")
-    checkoutActor ! SelectPayment("paypal", orderManagerProbe.ref)
+    checkoutActor ! SelectPayment("paypal", orderManagerProbe.ref, orderManagerPaymentProbe.ref)
     probe.expectMessage("selectingPayment")
     checkoutActor ! ConfirmPaymentReceived
     probe.expectMessage("processingPayment")
@@ -63,12 +64,13 @@ class TypedCheckoutTest
 
   it should "Not send close confirmation to cart" in {
     val cartActorProbe = testKit.createTestProbe[TypedCartActor.Command]
-    val orderManagerProbe = testKit.createTestProbe[OrderManager.Command]
+    val orderManagerProbe = testKit.createTestProbe[Event]
+    val orderManagerPayment = testKit.createTestProbe[Payment.Event]
     val checkoutActor  = testKit.spawn { new TypedCheckout(cartActorProbe.ref).start}
 
     checkoutActor ! StartCheckout
     checkoutActor ! SelectDeliveryMethod("inpost")
-    checkoutActor ! SelectPayment("paypal", orderManagerProbe.ref)
+    checkoutActor ! SelectPayment("paypal", orderManagerProbe.ref, orderManagerPayment.ref)
     cartActorProbe.expectNoMessage()
   }
 
