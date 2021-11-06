@@ -36,7 +36,7 @@ class OrderManagerIntegrationTest
   }
 
   it should "supervise whole order process" in {
-    val orderManager = testKit.spawn(new OrderManager().start).ref
+    val orderManager = testKit.spawn(OrderManager()).ref
 
     sendMessage(orderManager, AddItem("rollerblades", _))
 
