@@ -2,14 +2,14 @@ package EShop.lab2
 
 import akka.actor.Cancellable
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
-import akka.actor.typed.{ActorRef, Behavior}
+import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
 
 import scala.language.postfixOps
 import scala.concurrent.duration._
+import EShop.lab3.{OrderManager, Payment}
 
 object TypedCheckout {
-  def apply(): Behavior[Command] = new TypedCheckout().start
-
+  def apply(): Behavior[Command] = new TypedCheckout(ActorSystem(TypedCartActor(), "CartActor")).start
 
   sealed trait Data
   case object Uninitialized                               extends Data
@@ -17,20 +17,23 @@ object TypedCheckout {
   case class ProcessingPaymentStarted(timer: Cancellable) extends Data
 
   sealed trait Command
-  case object StartCheckout                       extends Command
-  case class SelectDeliveryMethod(method: String) extends Command
-  case object CancelCheckout                      extends Command
-  case object ExpireCheckout                      extends Command
-  case class SelectPayment(payment: String)       extends Command
-  case object ExpirePayment                       extends Command
-  case object ConfirmPaymentReceived              extends Command
+  case object StartCheckout                                                                  extends Command
+  case class SelectDeliveryMethod(method: String)                                            extends Command
+  case object CancelCheckout                                                                 extends Command
+  case object ExpireCheckout                                                                 extends Command
+  case class SelectPayment(payment: String, orderManagerRef: ActorRef[Event],
+                           orderManagerPaymentRef: ActorRef[Payment.Event])                  extends Command
+  case object ExpirePayment                                                                  extends Command
+  case object ConfirmPaymentReceived                                                         extends Command
 
   sealed trait Event
-  case object CheckOutClosed                        extends Event
-  case class PaymentStarted(payment: ActorRef[Any]) extends Event
+  case object CheckOutClosed                                       extends Event
+  case class PaymentStarted(paymentRef: ActorRef[Payment.Command]) extends Event
 }
 
-class TypedCheckout {
+class TypedCheckout(
+  cartActor: ActorRef[TypedCartActor.Command]
+) {
   import TypedCheckout._
 
   val checkoutTimerDuration: FiniteDuration = 10 seconds
@@ -72,9 +75,11 @@ class TypedCheckout {
   def selectingPaymentMethod(timer: Cancellable): Behavior[TypedCheckout.Command] = Behaviors.receive (
     (context, msg) =>
       msg match {
-        case SelectPayment(method) =>
+        case SelectPayment(method, orderManagerRef, orderManagerPaymentRef) =>
           timer.cancel()
           println("Selected payment method: " + method)
+          val payment = context.spawn(new Payment(method, orderManagerPaymentRef, context.self).start, "Payment")
+          orderManagerRef ! PaymentStarted(payment)
           processingPayment(schedulePaymentTimer(context))
 
         case ExpireCheckout =>
@@ -92,6 +97,7 @@ class TypedCheckout {
   def processingPayment(timer: Cancellable): Behavior[TypedCheckout.Command] = Behaviors.receiveMessage {
     case ConfirmPaymentReceived =>
       timer.cancel()
+      cartActor ! TypedCartActor.ConfirmCheckoutClosed
       closed
 
     case ExpirePayment =>

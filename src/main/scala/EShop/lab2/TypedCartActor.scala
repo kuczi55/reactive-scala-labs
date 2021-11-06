@@ -6,19 +6,21 @@ import akka.actor.typed.{ActorRef, Behavior}
 
 import scala.language.postfixOps
 import scala.concurrent.duration._
+import EShop.lab3.OrderManager
 
 object TypedCartActor {
   def apply(): Behavior[Command] = new TypedCartActor().start
 
   sealed trait Command
-  case class AddItem(item: Any)        extends Command
-  case class RemoveItem(item: Any)     extends Command
-  case object ExpireCart               extends Command
-  case object StartCheckout            extends Command
-  case object ConfirmCheckoutCancelled extends Command
-  case object ConfirmCheckoutClosed    extends Command
-  case object ListCart                 extends Command
-  case object Stop                     extends Command
+  case class AddItem(item: Any)                                             extends Command
+  case class RemoveItem(item: Any)                                          extends Command
+  case object ExpireCart                                                    extends Command
+  case class StartCheckout(orderManagerRef: ActorRef[Event])                extends Command
+  case object ConfirmCheckoutCancelled                                      extends Command
+  case object ConfirmCheckoutClosed                                         extends Command
+  case class GetItems(sender: ActorRef[Cart])                               extends Command // command made to make testing easier
+  case object ListCart                                                      extends Command
+  case object Stop                                                          extends Command
 
   sealed trait Event
   case class CheckoutStarted(checkoutRef: ActorRef[TypedCheckout.Command]) extends Event
@@ -45,6 +47,11 @@ class TypedCartActor {
           println("Cart is empty!")
           Behaviors.same
 
+        case GetItems(sender) => {
+          sender ! Cart.empty
+          Behaviors.same
+        }
+
         case Stop =>
           stop
       }
@@ -70,12 +77,19 @@ class TypedCartActor {
           println("Cart expired")
           empty
 
-        case StartCheckout =>
+        case StartCheckout(orderManagerRef) =>
           timer.cancel()
+          val checkout = context.spawn(new TypedCheckout(context.self).start, "Checkout")
+          checkout ! TypedCheckout.StartCheckout
+          orderManagerRef ! CheckoutStarted(checkout)
           inCheckout(cart)
 
         case ListCart =>
           println("Items in cart: " + cart + "\n")
+          Behaviors.same
+
+        case GetItems(sender) =>
+          sender ! cart
           Behaviors.same
 
         case Stop =>
@@ -96,6 +110,10 @@ class TypedCartActor {
 
         case ListCart =>
           println("Items in cart: " + cart + "\n")
+          Behaviors.same
+
+        case GetItems(sender) =>
+          sender ! cart
           Behaviors.same
 
         case Stop =>
