@@ -1,5 +1,7 @@
 package EShop.lab4
 
+import EShop.lab2
+import EShop.lab2.{Cart, TypedCartActor, TypedCheckout}
 import EShop.lab3.OrderManager
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.persistence.testkit.scaladsl.EventSourcedBehaviorTestKit
@@ -75,7 +77,7 @@ class PersistentCartActorTest
     resultAdd.state.isInstanceOf[NonEmpty] shouldBe true
 
     val resultStartCheckout =
-      eventSourcedTestKit.runCommand(StartCheckout(testKit.createTestProbe[OrderManager.Command]().ref))
+      eventSourcedTestKit.runCommand(StartCheckout(testKit.createTestProbe[TypedCartActor.Event]().ref))
 
     resultStartCheckout.event.isInstanceOf[CheckoutStarted] shouldBe true
     resultStartCheckout.state.isInstanceOf[InCheckout] shouldBe true
@@ -88,7 +90,7 @@ class PersistentCartActorTest
     resultAdd.state.isInstanceOf[NonEmpty] shouldBe true
 
     val resultStartCheckout =
-      eventSourcedTestKit.runCommand(StartCheckout(testKit.createTestProbe[OrderManager.Command]().ref))
+      eventSourcedTestKit.runCommand(StartCheckout(testKit.createTestProbe[TypedCartActor.Event]().ref))
 
     resultStartCheckout.event.isInstanceOf[CheckoutStarted] shouldBe true
     resultStartCheckout.state.isInstanceOf[InCheckout] shouldBe true
@@ -96,7 +98,7 @@ class PersistentCartActorTest
     val resultCancelCheckout =
       eventSourcedTestKit.runCommand(ConfirmCheckoutCancelled)
 
-    resultCancelCheckout.event shouldBe CheckoutCancelled
+    resultCancelCheckout.event.isInstanceOf[CheckoutCancelled] shouldBe true
     resultCancelCheckout.state.isInstanceOf[NonEmpty] shouldBe true
   }
 
@@ -107,7 +109,7 @@ class PersistentCartActorTest
     resultAdd.state.isInstanceOf[NonEmpty] shouldBe true
 
     val resultStartCheckout =
-      eventSourcedTestKit.runCommand(StartCheckout(testKit.createTestProbe[OrderManager.Command]().ref))
+      eventSourcedTestKit.runCommand(StartCheckout(testKit.createTestProbe[TypedCartActor.Event]().ref))
 
     resultStartCheckout.event.isInstanceOf[CheckoutStarted] shouldBe true
     resultStartCheckout.state.isInstanceOf[InCheckout] shouldBe true
@@ -126,7 +128,7 @@ class PersistentCartActorTest
     resultAdd.state.isInstanceOf[NonEmpty] shouldBe true
 
     val resultStartCheckout =
-      eventSourcedTestKit.runCommand(StartCheckout(testKit.createTestProbe[OrderManager.Command]().ref))
+      eventSourcedTestKit.runCommand(StartCheckout(testKit.createTestProbe[TypedCartActor.Event]().ref))
 
     resultStartCheckout.event.isInstanceOf[CheckoutStarted] shouldBe true
     resultStartCheckout.state.isInstanceOf[InCheckout] shouldBe true
@@ -139,7 +141,7 @@ class PersistentCartActorTest
 
   it should "not change state to inCheckout from empty" in {
     val resultStartCheckout =
-      eventSourcedTestKit.runCommand(StartCheckout(testKit.createTestProbe[OrderManager.Command]().ref))
+      eventSourcedTestKit.runCommand(StartCheckout(testKit.createTestProbe[TypedCartActor.Event]().ref))
 
     resultStartCheckout.hasNoEvents shouldBe true
     resultStartCheckout.state shouldBe Empty
@@ -157,5 +159,180 @@ class PersistentCartActorTest
 
     resultAdd2.hasNoEvents shouldBe true
     resultAdd2.state shouldBe Empty
+  }
+
+  it should "contain added items after restart" in {
+    val resultAdd = eventSourcedTestKit.runCommand(AddItem("laptop"))
+
+    resultAdd.event.isInstanceOf[ItemAdded] shouldBe true
+    resultAdd.state.isInstanceOf[NonEmpty] shouldBe true
+
+    val resultAdd2 = eventSourcedTestKit.runCommand(AddItem("phone"))
+
+    resultAdd2.event.isInstanceOf[ItemAdded] shouldBe true
+    resultAdd2.state.isInstanceOf[NonEmpty] shouldBe true
+
+    val resultAfterRestart = eventSourcedTestKit.restart()
+
+    resultAfterRestart.state.isInstanceOf[NonEmpty] shouldBe true
+    resultAfterRestart.state.cart shouldEqual Cart.empty.addItem("laptop").addItem("phone")
+  }
+
+  it should "contain added items before and added items after restart" in {
+    val resultAdd = eventSourcedTestKit.runCommand(AddItem("laptop"))
+
+    resultAdd.event.isInstanceOf[ItemAdded] shouldBe true
+    resultAdd.state.isInstanceOf[NonEmpty] shouldBe true
+
+    val resultAfterRestart = eventSourcedTestKit.restart()
+
+    resultAfterRestart.state.isInstanceOf[NonEmpty] shouldBe true
+    resultAfterRestart.state.cart shouldEqual Cart.empty.addItem("laptop")
+
+    val resultAdd2 = eventSourcedTestKit.runCommand(AddItem("phone"))
+
+    resultAdd2.event.isInstanceOf[ItemAdded] shouldBe true
+    resultAdd2.state.isInstanceOf[NonEmpty] shouldBe true
+    resultAdd2.state.cart shouldEqual Cart.empty.addItem("laptop").addItem("phone")
+  }
+
+  it should "ignore added item when state is checkout" in {
+    val resultAdd = eventSourcedTestKit.runCommand(AddItem("laptop"))
+
+    resultAdd.event.isInstanceOf[ItemAdded] shouldBe true
+    resultAdd.state.isInstanceOf[NonEmpty] shouldBe true
+
+    val resultStartCheckout =
+      eventSourcedTestKit.runCommand(StartCheckout(testKit.createTestProbe[TypedCartActor.Event]().ref))
+
+    resultStartCheckout.event.isInstanceOf[CheckoutStarted] shouldBe true
+    resultStartCheckout.state.isInstanceOf[InCheckout] shouldBe true
+
+    val resultAdd2 = eventSourcedTestKit.runCommand(AddItem("phone"))
+
+    resultAdd2.hasNoEvents shouldBe true
+    resultAdd2.state.isInstanceOf[InCheckout] shouldBe true
+
+    val resultAfterRestart = eventSourcedTestKit.restart()
+
+    resultAfterRestart.state.isInstanceOf[InCheckout] shouldBe true
+    resultAfterRestart.state.cart shouldEqual Cart.empty.addItem("laptop")
+  }
+
+  it should "be empty after adding and removing item before restart" in {
+    val resultAdd = eventSourcedTestKit.runCommand(AddItem("laptop"))
+
+    resultAdd.event.isInstanceOf[ItemAdded] shouldBe true
+    resultAdd.state.isInstanceOf[NonEmpty] shouldBe true
+
+    val resultRemove = eventSourcedTestKit.runCommand(RemoveItem("laptop"))
+
+    resultRemove.event shouldBe CartEmptied
+    resultRemove.state shouldBe Empty
+
+    val resultAfterRestart = eventSourcedTestKit.restart()
+
+    resultAfterRestart.state shouldBe Empty
+    resultAfterRestart.state.cart shouldEqual Cart.empty
+  }
+
+  it should "be empty after adding and removing item after restart" in {
+    val resultAdd = eventSourcedTestKit.runCommand(AddItem("laptop"))
+
+    resultAdd.event.isInstanceOf[ItemAdded] shouldBe true
+    resultAdd.state.isInstanceOf[NonEmpty] shouldBe true
+
+    val resultAfterRestart = eventSourcedTestKit.restart()
+
+    resultAfterRestart.state.isInstanceOf[NonEmpty] shouldBe true
+    resultAfterRestart.state.cart shouldEqual Cart.empty.addItem("laptop")
+
+    val resultRemove = eventSourcedTestKit.runCommand(RemoveItem("laptop"))
+
+    resultRemove.event shouldBe CartEmptied
+    resultRemove.state shouldBe Empty
+
+    val resultAfterRestart2 = eventSourcedTestKit.restart()
+
+    resultAfterRestart2.state shouldBe Empty
+    resultAfterRestart2.state.cart shouldEqual Cart.empty
+  }
+
+  it should "cancel checkout" in {
+    val resultAdd = eventSourcedTestKit.runCommand(AddItem("laptop"))
+
+    resultAdd.event.isInstanceOf[ItemAdded] shouldBe true
+    resultAdd.state.isInstanceOf[NonEmpty] shouldBe true
+
+    val resultStartCheckout =
+      eventSourcedTestKit.runCommand(StartCheckout(testKit.createTestProbe[TypedCartActor.Event]().ref))
+
+    resultStartCheckout.event.isInstanceOf[CheckoutStarted] shouldBe true
+    resultStartCheckout.state.isInstanceOf[InCheckout] shouldBe true
+
+    val resultAfterRestart = eventSourcedTestKit.restart()
+
+    resultAfterRestart.state.isInstanceOf[InCheckout] shouldBe true
+    resultAfterRestart.state.cart shouldEqual Cart.empty.addItem("laptop")
+
+    val resultCancelCheckout =
+      eventSourcedTestKit.runCommand(ConfirmCheckoutCancelled)
+
+    resultCancelCheckout.event.isInstanceOf[CheckoutCancelled] shouldBe true
+    resultCancelCheckout.state.isInstanceOf[NonEmpty] shouldBe true
+
+    val resultAfterRestart2 = eventSourcedTestKit.restart()
+
+    resultAfterRestart2.state.isInstanceOf[NonEmpty] shouldBe true
+    resultAfterRestart2.state.cart shouldEqual Cart.empty.addItem("laptop")
+  }
+
+  it should "expire cart in NonEmpty" in {
+    val resultAdd = eventSourcedTestKit.runCommand(AddItem("laptop"))
+
+    resultAdd.event.isInstanceOf[ItemAdded] shouldBe true
+    resultAdd.state.isInstanceOf[NonEmpty] shouldBe true
+
+    Thread.sleep(550)
+
+    val resultAfterRestart = eventSourcedTestKit.restart()
+
+    resultAfterRestart.state.isInstanceOf[NonEmpty] shouldBe true
+    resultAfterRestart.state.cart shouldEqual Cart.empty.addItem("laptop")
+
+    Thread.sleep(500)
+
+    val resultRemove = eventSourcedTestKit.runCommand(RemoveItem("laptop"))
+
+    resultRemove.hasNoEvents shouldBe true
+    resultRemove.state shouldBe Empty
+    resultRemove.state.cart shouldEqual Cart.empty
+  }
+
+  it should "expire cart in Checkout" in {
+    val resultAdd = eventSourcedTestKit.runCommand(AddItem("laptop"))
+
+    resultAdd.event.isInstanceOf[ItemAdded] shouldBe true
+    resultAdd.state.isInstanceOf[NonEmpty] shouldBe true
+
+    val resultStartCheckout =
+      eventSourcedTestKit.runCommand(StartCheckout(testKit.createTestProbe[TypedCartActor.Event]().ref))
+
+    resultStartCheckout.event.isInstanceOf[CheckoutStarted] shouldBe true
+    resultStartCheckout.state.isInstanceOf[InCheckout] shouldBe true
+
+    Thread.sleep(550)
+
+    val resultAfterRestart = eventSourcedTestKit.restart()
+
+    resultAfterRestart.state.isInstanceOf[InCheckout] shouldBe true
+    resultAfterRestart.state.cart shouldEqual Cart.empty.addItem("laptop")
+
+    Thread.sleep(500)
+
+    val resultCloseCheckout = eventSourcedTestKit.runCommand(ConfirmCheckoutClosed)
+
+    resultCloseCheckout.state shouldBe Empty
+    resultCloseCheckout.state.cart shouldEqual Cart.empty
   }
 }
