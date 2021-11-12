@@ -49,7 +49,7 @@ class TypedCartTest
     behaviorTestKit.run(AddItem("keyboard"))
     behaviorTestKit.run(StartCheckout(inbox.ref))
 
-    behaviorTestKit.expectEffect(Scheduled(15.seconds, behaviorTestKit.ref, TypedCartActor.ExpireCart))
+    behaviorTestKit.expectEffect(Scheduled(1.seconds, behaviorTestKit.ref, TypedCartActor.ExpireCart))
     behaviorTestKit.expectEffectType[Spawned[TypedCheckout]]
 
     val childInbox = behaviorTestKit.childInbox[TypedCheckout.Command]("Checkout")

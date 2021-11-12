@@ -36,7 +36,7 @@ class OrderManager(context: ActorContext[OrderManager.Command]) {
 
   val checkoutEventMapper: ActorRef[TypedCheckout.Event] =
     context.messageAdapter {
-      case TypedCheckout.PaymentStarted(paymentRef) => ConfirmPaymentStarted(paymentRef)
+      case TypedCheckout.PaymentStarted(paymentRef, _) => ConfirmPaymentStarted(paymentRef)
     }
 
   val paymentEventMapper: ActorRef[Payment.Event] =

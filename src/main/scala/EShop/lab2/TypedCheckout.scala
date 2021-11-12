@@ -8,6 +8,8 @@ import scala.language.postfixOps
 import scala.concurrent.duration._
 import EShop.lab3.{OrderManager, Payment}
 
+import java.time.Instant
+
 object TypedCheckout {
   def apply(): Behavior[Command] = new TypedCheckout(ActorSystem(TypedCartActor(), "CartActor")).start
 
@@ -28,8 +30,8 @@ object TypedCheckout {
 
   sealed trait Event
   case object CheckOutClosed                                    extends Event
-  case class PaymentStarted(payment: ActorRef[Payment.Command]) extends Event
-  case object CheckoutStarted                                   extends Event
+  case class PaymentStarted(payment: ActorRef[Payment.Command], startTime: Instant) extends Event
+  case class CheckoutStarted(startTime: Instant)                                   extends Event
   case object CheckoutCancelled                                 extends Event
   case class DeliveryMethodSelected(method: String)             extends Event
 
@@ -47,8 +49,8 @@ class TypedCheckout(
 ) {
   import TypedCheckout._
 
-  val checkoutTimerDuration: FiniteDuration = 10 seconds
-  val paymentTimerDuration: FiniteDuration  = 10 seconds
+  val checkoutTimerDuration: FiniteDuration = 1 seconds
+  val paymentTimerDuration: FiniteDuration  = 1 seconds
 
   private def scheduleCheckoutTimer(context: ActorContext[TypedCheckout.Command]): Cancellable =
     context.scheduleOnce(checkoutTimerDuration, context.self, ExpireCheckout)
@@ -90,7 +92,7 @@ class TypedCheckout(
           timer.cancel()
           println("Selected payment method: " + method)
           val payment = context.spawn(new Payment(method, orderManagerPaymentRef, context.self).start, "Payment")
-          orderManagerRef ! PaymentStarted(payment)
+          orderManagerRef ! PaymentStarted(payment, Instant.now())
           processingPayment(schedulePaymentTimer(context))
 
         case ExpireCheckout =>

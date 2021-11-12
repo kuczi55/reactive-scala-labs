@@ -8,6 +8,8 @@ import scala.language.postfixOps
 import scala.concurrent.duration._
 import EShop.lab3.OrderManager
 
+import java.time.Instant
+
 object TypedCartActor {
   def apply(): Behavior[Command] = new TypedCartActor().start
 
@@ -24,12 +26,12 @@ object TypedCartActor {
 
   sealed trait Event
   case class CheckoutStarted(checkoutRef: ActorRef[TypedCheckout.Command]) extends Event
-  case class ItemAdded(item: Any)                                          extends Event
-  case class ItemRemoved(item: Any)                                        extends Event
+  case class ItemAdded(item: Any, startTime: Instant)                      extends Event
+  case class ItemRemoved(item: Any, startTime: Instant)                    extends Event
   case object CartEmptied                                                  extends Event
   case object CartExpired                                                  extends Event
   case object CheckoutClosed                                               extends Event
-  case object CheckoutCancelled                                            extends Event
+  case class CheckoutCancelled(startTime: Instant)                         extends Event
 
   sealed abstract class State(val timerOpt: Option[Cancellable]) {
     def cart: Cart
@@ -45,7 +47,7 @@ class TypedCartActor {
 
   import TypedCartActor._
 
-  val cartTimerDuration: FiniteDuration = 15 seconds
+  val cartTimerDuration: FiniteDuration = 1 seconds
 
   private def scheduleTimer(context: ActorContext[TypedCartActor.Command]): Cancellable =
     context.scheduleOnce(cartTimerDuration, context.self, ExpireCart)
