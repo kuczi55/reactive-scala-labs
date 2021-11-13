@@ -1,6 +1,7 @@
 package EShop.lab5
 
 import EShop.lab5.ProductCatalog.GetItems
+import akka.Done
 import akka.actor.typed.{ActorRef, ActorSystem, Scheduler}
 import akka.actor.typed.receptionist.Receptionist
 import akka.actor.typed.scaladsl.AskPattern.Askable
@@ -58,10 +59,10 @@ class ProductCatalogHttpServer extends ProductCatalogJsonSupport {
 
   def routes: Route = {
     pathPrefix("products") {
-      parameters(Symbol("brand"), Symbol("keywords")) {
+      parameters(Symbol("brand").optional, Symbol("keywords").optional) {
         (brand, keywords) =>
           get {
-            val keywordsAsList = keywords.split(",").toList
+            val keywordsAsList = keywords.getOrElse("").split(",").toList
             val listingFuture: Future[Receptionist.Listing] = system.receptionist.ask(
               (ref: ActorRef[Receptionist.Listing]) => Receptionist.find(ProductCatalog.ProductCatalogServiceKey, ref)
             )
@@ -70,21 +71,22 @@ class ProductCatalogHttpServer extends ProductCatalogJsonSupport {
                 try {
                   val listings = listing
                   val productCatalog = listings.head
-                  val future = productCatalog.ask(ref => GetItems(brand, keywordsAsList, ref)).mapTo[ProductCatalog.Items]
+                  val future = productCatalog.ask(ref => GetItems(brand.getOrElse(""), keywordsAsList, ref)).mapTo[ProductCatalog.Items]
                   onSuccess(future) {
                     items: ProductCatalog.Items => complete(items)
                   }
                 } catch {
                   case e: NoSuchElementException => failWith(e)
                 }
-
+              case unknownListing =>
+                failWith(new IllegalArgumentException("Got unknown listing" + unknownListing))
             }
           }
       }
     }
   }
 
-  def start(port: Int) = {
+  def start(port: Int): Future[Done] = {
     val bindingFuture = Http().newServerAt("localhost", port).bind(routes)
 
     bindingFuture.onComplete {

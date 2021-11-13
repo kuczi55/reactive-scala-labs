@@ -39,10 +39,8 @@ object PaymentService {
             payment ! PaymentSucceeded
             Behaviors.stopped
           case 400 | 404 =>
-            Behaviors.stopped
             throw new PaymentClientError
           case 500 | 408 | 418 =>
-            Behaviors.stopped
             throw new PaymentServerError
         }
       case message =>
