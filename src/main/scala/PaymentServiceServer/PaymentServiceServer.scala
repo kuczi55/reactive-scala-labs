@@ -16,7 +16,7 @@ class PaymentServiceServer extends PaymentRoutes {
   lazy val routes: Route                          = userRoutes
 
   def run() = {
-    val serverBinding = Http().newServerAt("localhost", 8080).bind(routes)
+    val serverBinding = Http().newServerAt("localhost", 9000).bind(routes)
 
     serverBinding.onComplete {
       case Success(bound) =>
