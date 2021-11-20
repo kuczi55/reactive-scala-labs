@@ -77,7 +77,7 @@ object ProductCatalogApp extends App {
 
   private val productCatalogSystem = ActorSystem[Nothing](
     Behaviors.empty,
-    "ProductCatalog",
+    "ProductCatalogCluster",
     config.getConfig("productcatalog").withFallback(config)
   )
 
