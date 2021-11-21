@@ -4,7 +4,6 @@ import EShop.lab5.{ProductCatalog, SearchService}
 import EShop.lab5.ProductCatalog.GetItems
 import akka.Done
 import akka.actor.typed.{ActorRef, ActorSystem, Scheduler}
-import akka.actor.typed.receptionist.Receptionist
 import akka.actor.typed.scaladsl.AskPattern.Askable
 import akka.actor.typed.scaladsl.{Behaviors, Routers}
 import akka.http.scaladsl.Http
@@ -17,7 +16,6 @@ import spray.json.{DefaultJsonProtocol, JsString, JsValue, JsonFormat, PrettyPri
 
 import scala.concurrent._
 import java.net.URI
-import java.util.NoSuchElementException
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
@@ -38,11 +36,11 @@ trait ProductCatalogJsonSupport extends SprayJsonSupport with DefaultJsonProtoco
 }
 
 object ProductCatalogHttpServerApp extends App {
-  new ProductCatalogHttpServerInCluster().start(9000)
+  new ProductCatalogHttpServer().start(9000)
 }
 
 /** Just to demonstrate how one can build akka-http based server with JsonSupport */
-class ProductCatalogHttpServer extends ProductCatalogClusterJsonSupport {
+class ProductCatalogHttpServer extends ProductCatalogJsonSupport {
   implicit val timeout: Timeout = 3.second
 
   val config: Config = ConfigFactory.load()

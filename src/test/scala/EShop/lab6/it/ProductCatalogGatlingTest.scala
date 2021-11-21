@@ -35,7 +35,7 @@ class ProductCatalogGatlingTest extends Simulation {
     scn.inject(
       incrementUsersPerSec(50)
         .times(10)
-        .eachLevelLasting(10.seconds)
+        .eachLevelLasting(12.seconds)
         .separatedByRampsLasting(5.seconds)
         .startingFrom(50)
     )

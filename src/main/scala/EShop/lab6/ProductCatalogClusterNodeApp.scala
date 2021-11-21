@@ -21,8 +21,8 @@ object ProductCatalogClusterNodeApp extends App {
     },
     "ProductCatalogCluster",
     config
-      .getConfig(Try(args(0)).getOrElse("cluster-default"))
-      .withFallback(config.getConfig("cluster-default"))
+      .getConfig(Try(args(0)).getOrElse(""))
+      .withFallback(config)
   )
 
   Await.ready(system.whenTerminated, Duration.Inf)
