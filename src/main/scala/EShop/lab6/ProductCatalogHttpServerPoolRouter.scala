@@ -1,11 +1,11 @@
-package EShop.lab5
+package EShop.lab6
 
+import EShop.lab5.{ProductCatalog, SearchService}
 import EShop.lab5.ProductCatalog.GetItems
 import akka.Done
 import akka.actor.typed.{ActorRef, ActorSystem, Scheduler}
-import akka.actor.typed.receptionist.Receptionist
 import akka.actor.typed.scaladsl.AskPattern.Askable
-import akka.actor.typed.scaladsl.Behaviors
+import akka.actor.typed.scaladsl.{Behaviors, Routers}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import akka.http.scaladsl.server.Directives._
@@ -15,9 +15,7 @@ import com.typesafe.config.{Config, ConfigFactory}
 import spray.json.{DefaultJsonProtocol, JsString, JsValue, JsonFormat, PrettyPrinter, RootJsonFormat}
 
 import scala.concurrent._
-import ExecutionContext.Implicits.global
 import java.net.URI
-import java.util.NoSuchElementException
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
@@ -49,13 +47,14 @@ class ProductCatalogHttpServer extends ProductCatalogJsonSupport {
 
   implicit val system: ActorSystem[Nothing] = ActorSystem[Nothing](Behaviors.empty, "ProductCatalogCluster")
   implicit val scheduler: Scheduler = system.scheduler
-
-//  val productCatalogSystem: ActorSystem[Nothing] =
-//    ActorSystem[Nothing](Behaviors.empty, "ProductCatalog", config.getConfig("productcatalog").withFallback(config))
-//  productCatalogSystem.systemActorOf(ProductCatalog(new SearchService()), "productcatalog")
+  implicit val executionContext: ExecutionContextExecutor = system.executionContext
+  val productCatalogs: ActorRef[ProductCatalog.Query] = system.systemActorOf(
+    Routers.pool(3)(ProductCatalog(new SearchService())),
+    "productCatalogs"
+  )
 
   // wait for the cluster to form up
-  Thread.sleep(3000)
+  Thread.sleep(10000)
 
   def routes: Route = {
     pathPrefix("products") {
@@ -63,23 +62,11 @@ class ProductCatalogHttpServer extends ProductCatalogJsonSupport {
         (brand, keywords) =>
           get {
             val keywordsAsList = keywords.getOrElse("").split(",").toList
-            val listingFuture: Future[Receptionist.Listing] = system.receptionist.ask(
-              (ref: ActorRef[Receptionist.Listing]) => Receptionist.find(ProductCatalog.ProductCatalogServiceKey, ref)
-            )
-            onSuccess(listingFuture) {
-              case ProductCatalog.ProductCatalogServiceKey.Listing(listing) =>
-                try {
-                  val listings = listing
-                  val productCatalog = listings.head
-                  val future = productCatalog.ask(ref => GetItems(brand.getOrElse(""), keywordsAsList, ref)).mapTo[ProductCatalog.Items]
-                  onSuccess(future) {
-                    items: ProductCatalog.Items => complete(items)
-                  }
-                } catch {
-                  case e: NoSuchElementException => failWith(e)
-                }
-              case unknownListing =>
-                failWith(new IllegalArgumentException("Got unknown listing" + unknownListing))
+            val future = productCatalogs.ask(ref => GetItems(brand.getOrElse(""), keywordsAsList, ref)).mapTo[ProductCatalog.Items]
+            onSuccess(future) {
+              items: ProductCatalog.Items =>
+                println(items)
+                complete(items)
             }
           }
       }
